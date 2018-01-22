@@ -8,6 +8,7 @@
 #include <iterator>
 #include <numeric>
 #include <vector>
+#include <cmath>
 
 namespace linear_algebra
 {
@@ -185,6 +186,9 @@ namespace linear_algebra
 			return new_matrix;
 		}
 
+
+
+
 #pragma endregion
 
 #pragma endregion
@@ -312,6 +316,8 @@ namespace linear_algebra
 			return cof.transpose() / det;
 		}
 
+
+
 #pragma endregion
 
 		void print(std::streamsize precision) const
@@ -332,6 +338,10 @@ namespace linear_algebra
 		{
 			print(6);
 		}
+
+		size_t rowSize() const {return rows_;}
+		size_t columnSize() const {return cols_;}
+
 
 	private:
 		size_t rows_;
@@ -360,4 +370,184 @@ namespace linear_algebra
 			return *this;
 		}
 	};
+
+	template <typename T>
+	class lu_decomposition
+	{
+	public:
+		lu_decomposition(matrix2D<T> input):
+			parity(1),
+			index(input.rowSize(),0),
+			tiny_value(1e-20),
+			A(input)
+		{
+			assert(A.rowSize() == A.columnSize());
+			decompose();
+		}
+
+		void decompose()
+		{
+			//transcribed from c numerical recipes, as always
+			//this destroys the matrix, replacing it with the LU decomposition
+
+			std::vector<T> scaling_vector;
+
+			for(int i = 0; i < A.rowSize(); i++)
+			{
+				T big = 0.0;
+				for (int j = 0; j< A.rowSize(); j++)
+				{
+					if(abs(A[i][j])>big)
+						big = abs(A[i][j]);
+				}
+				assert(big > 0.0); // singular
+				scaling_vector.push_back(1.0/big);
+
+			}
+
+			//crout's method
+			int imax = 0;
+			for(int j=0; j<A.rowSize(); j++)
+			{
+				for(int i = 0; i<j; i++)
+				{
+					T sum=A[i][j];	
+					for(int k=0; k<i;k++)
+						sum-= A[i][k]*A[k][j];
+					A[i][j]=sum;
+				}
+				//search for pivot
+				T biggest_value =0;
+				for(int i = j; i < A.rowSize(); i++)
+				{
+					T sum = A[i][j];
+					for (int k=0;k<j;k++)
+						sum -= A[i][k]*A[k][j];
+					A[i][j]=sum;
+					if ( scaling_vector[i]*abs(sum) > biggest_value)
+					{
+						biggest_value = scaling_vector[i]*(abs(sum));
+						imax = i;
+					}
+				}
+				//do pivot
+				if(j != imax)
+				{
+					for(int k=0; k<A.rowSize(); k++)
+						std::swap(A[imax][k],A[j][k]);
+					parity = -parity;
+					std::swap(scaling_vector[j],scaling_vector[imax]);
+				}
+				index[j]=imax; //keep track of which rows were pivoted
+				if(A[j][j]==0.0)
+					A[j][j]=tiny_value;  //the attempt has failed, singular matrix.  using tiny_value will prevent inf values, which can salvage some info for postmortem
+				for(int i=j+1; i<A.rowSize(); i++)
+					A[i][j]/=A[j][j];
+			}
+		}
+
+		matrix2D<T> solve(const matrix2D<T>& b)
+		{
+			//make sure the dimensions mesh
+			assert(A.columnSize() == b.rowSize());
+
+			matrix2D<T> x = b;
+			//solve all columns
+			for(int column_i = 0; column_i < x.columnSize(); column_i++)
+				{
+				int first_nonzero_element = -1;
+				for(int i=0; i<A.rowSize(); i++) //forward substitute
+				{
+					T sum = x[index[i]][column_i];
+					if(first_nonzero_element>-1)
+					{
+						for (int j = first_nonzero_element; j<i;j++)
+							sum-=A[i][j]*x[j][column_i];
+					}
+					else
+					{
+						if(sum>0.0)
+							first_nonzero_element=i;
+					}
+					x[i][column_i]=sum;
+	
+				}
+				for(int i=A.rowSize()-1; i>=0; i--) //back substitute
+				{
+					T sum=x[i][column_i];
+					for(int j=i+1;j<A.rowSize(); j++)
+						sum-=A[i][j]*x[j][column_i];
+					x[i][column_i] = sum/A[i][i];
+				}
+			}
+			return x;
+		}
+
+		T det()
+		{
+			T d = parity;
+			for(int i=0; i < A.rowSize(); i++)
+				d*=A[i][i];
+			return d;
+		}
+
+		void print() const
+		{
+			A.print();
+		}
+		void print(std::streamsize precision) const
+		{
+			A.print(precision);
+		}
+
+
+	private:
+		T tiny_value;
+		matrix2D<T> A;
+		std::vector<int> index;
+		T parity;
+	};
+
+	matrix2D<double> eye(size_t matrix_size)
+	{
+		matrix2D<double> A(matrix_size,matrix_size);
+		for(int i=0; i< matrix_size; i++)
+		{
+			A[i][i]=1.0;
+		}
+		return A;
+	}
+
+	template<typename T>
+	matrix2D<T> expm(matrix2D<T> A)
+	{
+		assert(A.rowSize() == A.columnSize());
+		T error = 1.0;
+		int shots = 1;
+
+		matrix2D<T> Aexpm=eye(A.rowSize());
+		matrix2D<T> A_collected=eye(A.rowSize());
+		T determinant_old = 1.0;
+		T determinant;
+
+		while(error > 1e-8)
+		{
+			A_collected=A_collected*A/((T)shots);
+			Aexpm+=A_collected;	
+			determinant_old=determinant;
+			determinant = Aexpm.det();
+			error = abs(determinant - determinant_old);
+			shots++;
+		}
+		return Aexpm;
+	}
+
+	template<typename T>
+	matrix2D<T> solveL2(matrix2D<T> A,matrix2D<T> b)
+	{
+		//normal equations
+		lu_decomposition<T> LU(A.transpose()*A);
+		return LU.solve(A.transpose()*b);
+	}
+
 }
