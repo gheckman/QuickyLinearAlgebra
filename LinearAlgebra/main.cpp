@@ -2,6 +2,12 @@
 
 #include "matrix2D.h"
 
+template<typename T>
+void title(const T& x)
+{
+	std::cout << '\n' << x << "\n--------------------" << std::endl;
+}
+
 int main(int argc, char** argv)
 {
 	using namespace linear_algebra;
@@ -16,40 +22,44 @@ int main(int argc, char** argv)
 	x[2] = { 0, 1, 1 };
 
 	auto y = x.det();
-
 	auto z = x.inverse();
-
 	auto I = x * z;
 
+	title("x");
 	x.print(2);
-	cout << endl;
+	title("|x|");
 	cout << y << endl;
-	cout << endl;
+	title("x^-1");
 	z.print(2);
-	cout << endl;
+	title("x * x^-1 = I");
 	I.print(2);
-	cout << endl;
 
 	matrix2D<double> b(3,1);
 	b[0]={1};
 	b[1]={1};
 	b[2]={1};
-	lu_decomposition<double> LU(x);
-	LU.print(2);
-	cout << endl;
 
+	lu_decomposition<double> LU(x);
+
+	title("LU(x)");
+	LU.print(2);
+	title("|x|");
 	cout << x.det() << endl;
+	title("|LU(x)|");
 	cout << LU.det() << endl;
 
-	matrix2D<double> solution = LU.solve(b);
+	auto solution = LU.solve(b);
+	title("b");
+	b.print(2);
+	title("LU(x) solve for b");
 	solution.print(2);
-	cout << endl;
 
-	matrix2D<double> matrixExp = expm(x);
+	auto matrixExp = x.expm();
+	title("expm(x)");
 	matrixExp.print(2);
-	cout << endl;
 
-	solution = solveL2(x,b);
+	solution = x.solveL2(b);
+	title("L2 norm solve x for b");
 	solution.print(2);
 	cout << endl;
 
@@ -58,17 +68,21 @@ int main(int argc, char** argv)
 	A[1] = { 2, 0,-2 };
 	A[2] = { 0, 1, 1 };
 	A[3] = { 4, 1, 1 };
+
 	b = matrix2D<double>(4,1);
 	b[0]={1};
 	b[1]={1};
 	b[2]={1};
 	b[3]={1};
 
-	solution = solveL2(A,b);
+	title("A");
+	A.print();
+	title("b");
+	b.print();
+	title("L2 norm solve A for b");
+	solution = A.solveL2(b);
 	solution.print(2);
 	cout << endl;
-
-
 
 	char _1;
 	cin >> _1;

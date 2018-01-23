@@ -186,9 +186,6 @@ namespace linear_algebra
 			return new_matrix;
 		}
 
-
-
-
 #pragma endregion
 
 #pragma endregion
@@ -316,7 +313,41 @@ namespace linear_algebra
 			return cof.transpose() / det;
 		}
 
+		matrix2D<T> expm()
+		{
+			// NRVO delaration
+			auto expm_matrix = identity(row_size());
 
+			constexpr double error_expm = 1e-8;
+
+			assert(row_size() == column_size());
+
+			T error{ 1.0 };
+			int shots{ 1 };
+
+			auto collected = identity(row_size());
+			T determinant_old{ 1.0 };
+			T determinant{};
+
+			while (error > error_expm)
+			{
+				collected *= *this / (T)shots;
+				expm_matrix += collected;
+				determinant_old = determinant;
+				determinant = expm_matrix.det();
+				error = std::abs(determinant - determinant_old);
+				++shots;
+			}
+
+			return expm_matrix;
+		}
+
+		matrix2D<T> solveL2(const matrix2D<T>& b)
+		{
+			//normal equations
+			lu_decomposition<T> LU(transpose() * *this);
+			return LU.solve(transpose() * b);
+		}
 
 #pragma endregion
 
@@ -339,8 +370,8 @@ namespace linear_algebra
 			print(6);
 		}
 
-		size_t rowSize() const {return rows_;}
-		size_t columnSize() const {return cols_;}
+		size_t row_size() const { return rows_; }
+		size_t column_size() const { return cols_; }
 
 
 	private:
@@ -371,19 +402,88 @@ namespace linear_algebra
 		}
 	};
 
+	matrix2D<double> identity(size_t matrix_size)
+	{
+		matrix2D<double> I(matrix_size, matrix_size);
+		for (size_t i = 0; i < matrix_size; ++i)
+			I[i][i] = 1.0;
+		return I;
+	}
+
 	template <typename T>
 	class lu_decomposition
 	{
 	public:
-		lu_decomposition(matrix2D<T> input):
-			parity(1),
-			index(input.rowSize(),0),
-			tiny_value(1e-20),
-			A(input)
+		lu_decomposition(matrix2D<T> input) :
+			parity_(1),
+			index_(input.row_size(), 0),
+			tiny_value_(1e-20),
+			A_(input)
 		{
-			assert(A.rowSize() == A.columnSize());
+			assert(A_.row_size() == A_.column_size());
 			decompose();
 		}
+
+		matrix2D<T> solve(const matrix2D<T>& b)
+		{
+			//make sure the dimensions mesh
+			assert(A_.column_size() == b.row_size());
+
+			auto x = b;
+			//solve all columns
+			for (size_t column_i = 0; column_i < x.column_size(); ++column_i)
+			{
+				int first_nonzero_element = -1;
+				for (size_t i = 0; i < A_.row_size(); ++i) //forward substitute
+				{
+					T sum = x[index_[i]][column_i];
+					if (first_nonzero_element > -1)
+					{
+						for (size_t j = first_nonzero_element; j < i; ++j)
+							sum -= A_[i][j] * x[j][column_i];
+					}
+					else
+					{
+						if (sum > 0.0)
+							first_nonzero_element = i;
+					}
+					x[i][column_i] = sum;
+
+				}
+				for (int i = A_.row_size() - 1; i >= 0; --i) //back substitute
+				{
+					T sum = x[i][column_i];
+					for (size_t j = i + 1; j < A_.row_size(); ++j)
+						sum -= A_[i][j] * x[j][column_i];
+					x[i][column_i] = sum / A_[i][i];
+				}
+			}
+			return x;
+		}
+
+		T det()
+		{
+			T d = parity_;
+			for (size_t i = 0; i < A_.row_size(); i++)
+				d *= A_[i][i];
+			return d;
+		}
+
+		void print() const
+		{
+			A_.print();
+		}
+
+		void print(std::streamsize precision) const
+		{
+			A_.print(precision);
+		}
+
+	private:
+		T tiny_value_;
+		matrix2D<T> A_;
+		std::vector<int> index_;
+		T parity_;
 
 		void decompose()
 		{
@@ -392,162 +492,59 @@ namespace linear_algebra
 
 			std::vector<T> scaling_vector;
 
-			for(int i = 0; i < A.rowSize(); i++)
+			for (size_t i = 0; i < A_.row_size(); i++)
 			{
 				T big = 0.0;
-				for (int j = 0; j< A.rowSize(); j++)
+				for (size_t j = 0; j < A_.row_size(); j++)
 				{
-					if(abs(A[i][j])>big)
-						big = abs(A[i][j]);
+					if (abs(A_[i][j]) > big)
+						big = abs(A_[i][j]);
 				}
 				assert(big > 0.0); // singular
-				scaling_vector.push_back(1.0/big);
+				scaling_vector.push_back(1.0 / big);
 
 			}
 
 			//crout's method
 			int imax = 0;
-			for(int j=0; j<A.rowSize(); j++)
+			for (size_t j = 0; j < A_.row_size(); j++)
 			{
-				for(int i = 0; i<j; i++)
+				for (size_t i = 0; i < j; i++)
 				{
-					T sum=A[i][j];	
-					for(int k=0; k<i;k++)
-						sum-= A[i][k]*A[k][j];
-					A[i][j]=sum;
+					T sum = A_[i][j];
+					for (size_t k = 0; k < i; k++)
+						sum -= A_[i][k] * A_[k][j];
+					A_[i][j] = sum;
 				}
 				//search for pivot
-				T biggest_value =0;
-				for(int i = j; i < A.rowSize(); i++)
+				T biggest_value = 0;
+				for (size_t i = j; i < A_.row_size(); i++)
 				{
-					T sum = A[i][j];
-					for (int k=0;k<j;k++)
-						sum -= A[i][k]*A[k][j];
-					A[i][j]=sum;
-					if ( scaling_vector[i]*abs(sum) > biggest_value)
+					T sum = A_[i][j];
+					for (size_t k = 0; k < j; k++)
+						sum -= A_[i][k] * A_[k][j];
+					A_[i][j] = sum;
+					if (scaling_vector[i] * abs(sum) > biggest_value)
 					{
-						biggest_value = scaling_vector[i]*(abs(sum));
+						biggest_value = scaling_vector[i] * abs(sum);
 						imax = i;
 					}
 				}
 				//do pivot
-				if(j != imax)
+				if (j != imax)
 				{
-					for(int k=0; k<A.rowSize(); k++)
-						std::swap(A[imax][k],A[j][k]);
-					parity = -parity;
-					std::swap(scaling_vector[j],scaling_vector[imax]);
+					for (size_t k = 0; k < A_.row_size(); k++)
+						std::swap(A_[imax][k], A_[j][k]);
+					parity_ = -parity_;
+					std::swap(scaling_vector[j], scaling_vector[imax]);
 				}
-				index[j]=imax; //keep track of which rows were pivoted
-				if(A[j][j]==0.0)
-					A[j][j]=tiny_value;  //the attempt has failed, singular matrix.  using tiny_value will prevent inf values, which can salvage some info for postmortem
-				for(int i=j+1; i<A.rowSize(); i++)
-					A[i][j]/=A[j][j];
+				index_[j] = imax; //keep track of which rows were pivoted
+				if (A_[j][j] == 0.0)
+					A_[j][j] = tiny_value_;  //the attempt has failed, singular matrix.  using tiny_value will prevent inf values, which can salvage some info for postmortem
+				for (size_t i = j + 1; i < A_.row_size(); i++)
+					A_[i][j] /= A_[j][j];
 			}
 		}
-
-		matrix2D<T> solve(const matrix2D<T>& b)
-		{
-			//make sure the dimensions mesh
-			assert(A.columnSize() == b.rowSize());
-
-			matrix2D<T> x = b;
-			//solve all columns
-			for(int column_i = 0; column_i < x.columnSize(); column_i++)
-				{
-				int first_nonzero_element = -1;
-				for(int i=0; i<A.rowSize(); i++) //forward substitute
-				{
-					T sum = x[index[i]][column_i];
-					if(first_nonzero_element>-1)
-					{
-						for (int j = first_nonzero_element; j<i;j++)
-							sum-=A[i][j]*x[j][column_i];
-					}
-					else
-					{
-						if(sum>0.0)
-							first_nonzero_element=i;
-					}
-					x[i][column_i]=sum;
-	
-				}
-				for(int i=A.rowSize()-1; i>=0; i--) //back substitute
-				{
-					T sum=x[i][column_i];
-					for(int j=i+1;j<A.rowSize(); j++)
-						sum-=A[i][j]*x[j][column_i];
-					x[i][column_i] = sum/A[i][i];
-				}
-			}
-			return x;
-		}
-
-		T det()
-		{
-			T d = parity;
-			for(int i=0; i < A.rowSize(); i++)
-				d*=A[i][i];
-			return d;
-		}
-
-		void print() const
-		{
-			A.print();
-		}
-		void print(std::streamsize precision) const
-		{
-			A.print(precision);
-		}
-
-
-	private:
-		T tiny_value;
-		matrix2D<T> A;
-		std::vector<int> index;
-		T parity;
 	};
-
-	matrix2D<double> eye(size_t matrix_size)
-	{
-		matrix2D<double> A(matrix_size,matrix_size);
-		for(int i=0; i< matrix_size; i++)
-		{
-			A[i][i]=1.0;
-		}
-		return A;
-	}
-
-	template<typename T>
-	matrix2D<T> expm(matrix2D<T> A)
-	{
-		assert(A.rowSize() == A.columnSize());
-		T error = 1.0;
-		int shots = 1;
-
-		matrix2D<T> Aexpm=eye(A.rowSize());
-		matrix2D<T> A_collected=eye(A.rowSize());
-		T determinant_old = 1.0;
-		T determinant;
-
-		while(error > 1e-8)
-		{
-			A_collected=A_collected*A/((T)shots);
-			Aexpm+=A_collected;	
-			determinant_old=determinant;
-			determinant = Aexpm.det();
-			error = abs(determinant - determinant_old);
-			shots++;
-		}
-		return Aexpm;
-	}
-
-	template<typename T>
-	matrix2D<T> solveL2(matrix2D<T> A,matrix2D<T> b)
-	{
-		//normal equations
-		lu_decomposition<T> LU(A.transpose()*A);
-		return LU.solve(A.transpose()*b);
-	}
 
 }
