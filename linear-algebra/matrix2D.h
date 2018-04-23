@@ -1,3 +1,8 @@
+/**
+@file matrix2D.h
+@brief It's a matrix.
+*/
+
 #pragma once
 
 #include <algorithm>
@@ -12,39 +17,76 @@
 
 namespace linear_algebra
 {
+	/**
+	A single row from the matrix.
+	Limited API into the storage structure of a single matrix row.
+	@tparam T The type of data each element of the matrix row holds. Recommended: float or double.
+	*/
 	template <typename T>
 	class matrix_row
 	{
 	public:
+
+		/**
+		Default constructor.
+		Represents a single matrix row.
+		*/
 		matrix_row(std::vector<T>& row) :
 			row_(row)
 		{}
 
-		T& operator [] (const size_t i)
+		/**
+		Element access operator.
+		@param [in] i Index into the row. 
+		@return Element at the given index.
+		*/
+		auto& operator [] (const size_t i)
 		{
 			return row_[i];
 		}
 
+		/**
+		Element access operator.
+		@param [in] i Index into the row.
+		@return Element at the given index.
+		*/
 		const T& operator [] (const size_t i) const
 		{
 			return row_[i];
 		}
 
-		template <typename InputIter>
-		void assign(InputIter first, InputIter last)
+		/**
+		Assigns an iterator range to the row.
+		@tparam FwdIt Forward iterator.
+		@param [in] first Iterator to the first element.
+		@param [in] last  Iterator to 1 past the last element.
+		*/
+		template <typename FwdIt>
+		void assign(FwdIt first, FwdIt last)
 		{
 			auto dist = std::min(std::distance(cbegin(row_), cend(row_)), std::distance(first, last));
 			auto real_last = first;
 			std::advance(real_last, dist);
+			// todo [9] std::copy here instead?
 			std::transform(first, real_last, begin(row_), [](T x) { return x; });
 		}
 
+		/**
+		Assigns an initializer list to the row.
+		@param [in] list Initializer list.
+		*/
 		void assign(const std::initializer_list<T>& list)
 		{
 			assign(cbegin(list), cend(list));
 		}
 
-		matrix_row& operator = (const std::initializer_list<T>& list)
+		/**
+		Assignment operator.
+		Assigns an initializer list to the row.
+		@param [in] list Initializer list.
+		@return this.
+		*/
+		auto& operator = (const std::initializer_list<T>& list)
 		{
 			assign(list);
 			return *this;
@@ -54,6 +96,12 @@ namespace linear_algebra
 		std::vector<T>& row_;
 	};
 
+	/**
+	Default constructor.
+	Zero matrix.
+	@param [in] rows Number of rows.
+	@param [in] cols Number of columns.
+	*/
 	template <typename T>
 	class matrix2D
 	{
@@ -63,19 +111,30 @@ namespace linear_algebra
 			cols_(cols)
 		{
 			data_.assign(rows, std::vector<T>{});
-			std::for_each(begin(data_), end(data_), [=](std::vector<T>& x) { x.assign(cols, 0); });
+			for (auto& row : data_)
+				row.assign(cols, 0);
 		}
 
 #pragma region operators
 
 #pragma region access
 
-		matrix_row<T> operator [] (const size_t i)
+		/**
+		Index operator.
+		@param [in] i Index into the rows.
+		@return Row of the matrix at the given index.
+		*/
+		auto operator [] (const size_t i)
 		{
-			return data_.at(i);
+			return matrix_row<T>(data_.at(i));
 		}
 
-		const matrix_row<T> operator [] (const size_t i) const
+		/**
+		Index operator.
+		@param [in] i Index into the rows.
+		@return Row of the matrix at the given index.
+		*/
+		const auto operator [] (const size_t i) const
 		{
 			// Dangerous to take away const, but I'm adding back in, so...
 			auto& non_const_vector = const_cast<std::vector<T>&>(data_.at(i));
@@ -87,18 +146,28 @@ namespace linear_algebra
 
 #pragma region matrix math
 
-		matrix2D& operator *= (const matrix2D& rhs)
+		/**
+		Multiplies 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return The product of the matrix2Ds.
+		*/
+		template<typename U>
+		auto& operator *= (const matrix2D<U>& rhs)
 		{
-			auto new_matrix(*this);
-
-			*this = new_matrix * rhs;
-
+			*this = *this * rhs;
 			return *this;
 		}
 
-		matrix2D operator * (const matrix2D& rhs) const
+		/**
+		Multiplies 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return The product of the matrix2Ds.
+		*/
+		template<typename U>
+		auto operator * (const matrix2D<U>& rhs) const
 		{
-			matrix2D new_matrix(rows_, rhs.cols_);
+			using ResultT = decltype(std::declval<T>() * std::declval<U>());
+			matrix2D<ResultT> new_matrix(rows_, rhs.cols_);
 
 			assert(cols_ == rhs.rows_);
 
@@ -110,24 +179,48 @@ namespace linear_algebra
 			return new_matrix;
 		}
 
-		matrix2D& operator += (const matrix2D& rhs)
+		/**
+		Adds 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return Elementwise addition of the matrix2Ds.
+		*/
+		template<typename U>
+		auto& operator += (const matrix2D<U>& rhs)
 		{
 			return add_or_sub(rhs, std::plus<T>());
 		}
 
-		matrix2D operator + (const matrix2D& rhs) const
+		/**
+		Adds 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return Elementwise addition of the matrix2Ds.
+		*/
+		template<typename U>
+		auto operator + (const matrix2D<U>& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix += rhs;
 			return new_matrix;
 		}
 
-		matrix2D& operator -= (const matrix2D& rhs)
+		/**
+		Subtracts 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return Elementwise subtraction of the matrix2Ds.
+		*/
+		template<typename U>
+		auto& operator -= (const matrix2D<U>& rhs)
 		{
 			return add_or_sub(rhs, std::minus<T>());
 		}
 
-		matrix2D operator - (const matrix2D& rhs) const
+		/**
+		Subtracts 2 matrix2Ds.
+		@tparam U Some matrix2D element type.
+		@return Elementwise subtraction of the matrix2Ds.
+		*/
+		template<typename U>
+		auto operator - (const matrix2D<U>& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix -= rhs;
@@ -138,48 +231,97 @@ namespace linear_algebra
 
 #pragma region scalar math
 
-		matrix2D& operator *= (const T& rhs)
+		/**
+		Multiplies a matrix2D by a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return The product of the matrix2D with the scalar.
+		*/
+		template<typename U>
+		auto& operator *= (const U& rhs)
 		{
-			return scalar_op(rhs, std::multiplies<T>());
+			return scalar_op(rhs, std::multiplies<U>());
 		}
 
-		matrix2D operator * (const T& rhs) const
+		/**
+		Multiplies a matrix2D by a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return The product of the matrix2D with the scalar.
+		*/
+		auto operator * (const T& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix *= rhs;
 			return new_matrix;
 		}
 
-		matrix2D& operator /= (const T& rhs)
+		/**
+		Divides a matrix2D by a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return The product of the matrix2D with the inverse of the scalar.
+		*/
+		auto& operator /= (const T& rhs)
 		{
 			return scalar_op(rhs, std::divides<T>());
 		}
 
-		matrix2D operator / (const T& rhs) const
+		/**
+		Divides a matrix2D by a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return The product of the matrix2D with the inverse of the scalar.
+		*/
+		auto operator / (const T& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix /= rhs;
 			return new_matrix;
 		}
 
-		matrix2D& operator += (const T& rhs)
+		/**
+		Adds a matrix2D and a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return Addition of each matrix element with the scalar.
+		*/
+		auto& operator += (const T& rhs)
 		{
 			return scalar_op(rhs, std::plus<T>());
 		}
 
-		matrix2D operator + (const T& rhs) const
+		/**
+		Adds a matrix2D and a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return Addition of each matrix element with the scalar.
+		*/
+		auto operator + (const T& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix += rhs;
 			return new_matrix;
 		}
 
-		matrix2D& operator -= (const T& rhs)
+		/**
+		Subtracts a matrix2D and a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return Addition of each matrix element with the negation of the scalar.
+		*/
+		auto& operator -= (const T& rhs)
 		{
 			return scalar_op(rhs, std::minus<T>());
 		}
 
-		matrix2D operator - (const T& rhs) const
+		/**
+		Subtracts a matrix2D and a scalar.
+		@tparam U Some scalar type.
+		@param [in] rhs Scalar on the right hand side.
+		@return Addition of each matrix element with the negation of the scalar.
+		*/
+		auto operator - (const T& rhs) const
 		{
 			auto new_matrix(*this);
 			new_matrix -= rhs;

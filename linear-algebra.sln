@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LinearAlgebra", "LinearAlgebra\LinearAlgebra.vcxproj", "{3213A79D-9DC5-4EA5-8B32-2FBAC8D905A4}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "linear-algebra", "linear-algebra\linear-algebra.vcxproj", "{3213A79D-9DC5-4EA5-8B32-2FBAC8D905A4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
